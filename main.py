@@ -33,7 +33,7 @@ def show_history(calc: Calculator):
     if not history:
         print("История пуста")
         return
-    
+
     print("\n=== ИСТОРИЯ ВЫЧИСЛЕНИЙ ===")
     for i, (operation, result) in enumerate(history, 1):
         print(f"{i}. {operation} = {result}")
@@ -43,13 +43,13 @@ def show_history(calc: Calculator):
 def main():
     """Основная функция программы."""
     calc = Calculator()
-    
+
     print("Добро пожаловать в калькулятор!")
-    
+
     while True:
         print_menu()
         choice = input("Выберите операцию (0-6): ").strip()
-        
+
         if choice == "0":
             print("До свидания!")
             break

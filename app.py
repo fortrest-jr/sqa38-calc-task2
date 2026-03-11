@@ -2,7 +2,8 @@ from flask import Flask, request, jsonify
 from calculator import Calculator
 from datetime import datetime, timezone
 import uuid
-from marshmallow import Schema, fields
+from marshmallow import Schema, fields, validate, ValidationError, validates_schema
+from functools import wraps
 
 app = Flask(__name__)
 
@@ -10,149 +11,211 @@ app = Flask(__name__)
 calculator = Calculator()
 
 
-# Marshmallow Schema для API ответов (используется для документации и валидации)
-# Эти схемы определяют структуру данных, но не используются напрямую для создания объектов
-class UserSchema(Schema):
-    id = fields.Str(required=True)
-    name = fields.Str(required=True)
-    role = fields.Str(required=True)
+# ============================================================================
+# Schemas для валидации входных данных (Request Schemas)
+# ============================================================================
 
 
-class TimestampsSchema(Schema):
-    created_at = fields.Str(required=True)
-    timezone = fields.Str(required=True)
-    request_id = fields.Str(required=True)
+class BinaryOperationRequestSchema(Schema):
+    """Схема для операций с двумя операндами (сложение, вычитание, умножение, деление)."""
+
+    a = fields.Float(
+        required=True,
+        error_messages={
+            'required': 'Требуются параметры a и b',
+            'invalid': 'Not a valid number.',
+            'null': 'Требуются параметры a и b',
+        },
+    )
+    b = fields.Float(
+        required=True,
+        error_messages={
+            'required': 'Требуются параметры a и b',
+            'invalid': 'Not a valid number.',
+            'null': 'Требуются параметры a и b',
+        },
+    )
 
 
-class StatusSchema(Schema):
-    code = fields.Str(required=True)
-    message = fields.Str(required=True)
-    execution_time_ms = fields.Int(required=True)
+class RoundRequestSchema(Schema):
+    """Схема для операции округления."""
+
+    value = fields.Float(required=True, error_messages={'required': 'Требуются параметры value и precision'})
+    precision = fields.Integer(required=True, error_messages={'required': 'Требуются параметры value и precision'})
+    method = fields.Str(
+        load_default='auto',
+        validate=validate.OneOf(['auto', 'up', 'down', 'banker', 'truncate']),
+        error_messages={'validator_failed': 'Неподдерживаемый метод. Доступны: auto, up, down, banker, truncate'},
+    )
 
 
-class MetaSchema(Schema):
-    user = fields.Nested(UserSchema, required=True)
-    timestamps = fields.Nested(TimestampsSchema, required=True)
-    status = fields.Nested(StatusSchema, required=True)
+class CalculateRequestSchema(Schema):
+    """Схема для универсального эндпоинта вычислений."""
+
+    operation = fields.Str(
+        required=True,
+        validate=validate.OneOf(
+            ['add', 'subtract', 'multiply', 'divide', 'round'],
+            error='Неподдерживаемая операция. Доступны: add, subtract, multiply, divide, round',
+        ),
+    )
+    a = fields.Float(load_default=None)
+    b = fields.Float(load_default=None)
+    value = fields.Float(load_default=None)
+    precision = fields.Integer(load_default=None)
+    method = fields.Str(
+        load_default='auto',
+        validate=validate.OneOf(['auto', 'up', 'down', 'banker', 'truncate']),
+        error_messages={'validator_failed': 'Неподдерживаемый метод. Доступны: auto, up, down, banker, truncate'},
+    )
+
+    @validates_schema
+    def validate_operation_params(self, data, **kwargs):
+        """Валидация параметров в зависимости от операции."""
+        operation = data.get('operation')
+
+        if operation == 'round':
+            if data.get('value') is None or data.get('precision') is None:
+                raise ValidationError('Для операции round требуются параметры value и precision')
+        elif operation in ['add', 'subtract', 'multiply', 'divide']:
+            if data.get('a') is None or data.get('b') is None:
+                raise ValidationError(f'Для операции {operation} требуются параметры a и b')
 
 
-class OperandsSchema(Schema):
-    a = fields.Float(required=True)
-    b = fields.Float(required=True)
+class ErrorResponseSchema(Schema):
+    """Схема для ответов с ошибками."""
+
+    error = fields.Str(required=True)
+    code = fields.Str(load_default=None)
+    details = fields.Dict(load_default=None)
 
 
-class OperationSchema(Schema):
-    expression = fields.Str(required=True)
-    type = fields.Str(required=True)
-    operands = fields.Nested(OperandsSchema, required=True)
+# ============================================================================
+# Декоратор для валидации входных данных
+# ============================================================================
 
 
-class ResultSchema(Schema):
-    value = fields.Float(required=True)
-    formatted = fields.Str(required=True)
-    precision = fields.Int(required=True)
+def format_validation_errors(messages):
+    """
+    Форматирует ошибки валидации Marshmallow в читаемую строку.
+
+    Args:
+        messages: Словарь с ошибками валидации от Marshmallow
+
+    Returns:
+        Отформатированная строка с ошибками
+    """
+    errors = []
+    for field, field_errors in messages.items():
+        if isinstance(field_errors, list):
+            for error in field_errors:
+                # Проверяем типичные ошибки Marshmallow и заменяем на более понятные
+                if 'Not a valid' in str(error):
+                    errors.append('Некорректные данные: could not convert string to float')
+                else:
+                    errors.append(str(error))
+        elif isinstance(field_errors, dict):
+            # Рекурсивная обработка вложенных ошибок
+            errors.append(f"{field}: {format_validation_errors(field_errors)}")
+        else:
+            errors.append(str(field_errors))
+    return '; '.join(errors) if errors else 'Ошибка валидации данных'
 
 
-class ItemMetadataSchema(Schema):
-    timestamp = fields.Str(required=True)
-    session_id = fields.Str(required=True)
+def validate_request(schema_class):
+    """
+    Декоратор для валидации входных данных с помощью Marshmallow схемы.
+
+    Args:
+        schema_class: Класс Marshmallow схемы для валидации
+
+    Returns:
+        Обертка, которая валидирует данные перед выполнением функции
+    """
+
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            schema = schema_class()
+            try:
+                # Получаем JSON данные (silent=False чтобы выбросить исключение при некорректном JSON)
+                json_data = request.get_json(force=True, silent=False)
+
+                # Валидируем входные данные
+                data = schema.load(json_data)
+            except ValidationError as err:
+                # Используем структурированную обработку ошибок
+                error_text = format_validation_errors(err.messages)
+                error_response = ErrorResponseSchema().dump(
+                    {'error': error_text, 'code': 'VALIDATION_ERROR', 'details': err.messages}
+                )
+                return jsonify(error_response), 400
+            except Exception as e:
+                # Возвращаем 500 для ошибок парсинга JSON и других внутренних ошибок
+                error_response = ErrorResponseSchema().dump(
+                    {'error': f'Некорректные данные: {str(e)}', 'code': 'PARSE_ERROR'}
+                )
+                return jsonify(error_response), 500
+
+            # Передаем валидированные данные в функцию
+            return f(data, *args, **kwargs)
+
+        return wrapper
+
+    return decorator
 
 
-class HistoryItemSchema(Schema):
-    id = fields.Int(required=True)
-    operation = fields.Nested(OperationSchema, required=True)
-    result = fields.Nested(ResultSchema, required=True)
-    metadata = fields.Nested(ItemMetadataSchema, required=True)
-
-
-class PaginationSchema(Schema):
-    total = fields.Int(required=True)
-    page = fields.Int(required=True)
-    per_page = fields.Int(required=True)
-    has_more = fields.Bool(required=True)
-
-
-class DataSchema(Schema):
-    history = fields.List(fields.Nested(HistoryItemSchema), required=True)
-    pagination = fields.Nested(PaginationSchema, required=True)
-
-
-class HistoryResponseSchema(Schema):
-    meta = fields.Nested(MetaSchema, required=True)
-    data = fields.Nested(DataSchema, required=True)
+# ============================================================================
+# Эндпоинты API
+# ============================================================================
 
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
+    """Проверка работоспособности сервиса."""
     return jsonify({'status': 'ok', 'message': 'Калькулятор работает'})
 
 
 @app.route('/api/add', methods=['POST'])
-def add():
+@validate_request(BinaryOperationRequestSchema)
+def add(data):
+    """Сложение двух чисел."""
     try:
-        data = request.get_json()
-        if not data or 'a' not in data or 'b' not in data:
-            return jsonify({'error': 'Требуются параметры a и b'}), 400
-
-        a = float(data['a'])
-        b = float(data['b'])
-        result = calculator.add(a, b)
-
-        return jsonify({'operation': 'add', 'a': a, 'b': b, 'result': result})
-    except ValueError as e:
-        return jsonify({'error': f'Некорректные данные: {str(e)}'}), 400
+        result = calculator.add(data['a'], data['b'])
+        return jsonify({'operation': 'add', 'a': data['a'], 'b': data['b'], 'result': result})
     except Exception as e:
         return jsonify({'error': f'Внутренняя ошибка: {str(e)}'}), 500
 
 
 @app.route('/api/subtract', methods=['POST'])
-def subtract():
+@validate_request(BinaryOperationRequestSchema)
+def subtract(data):
+    """Вычитание двух чисел."""
     try:
-        data = request.get_json()
-        if not data or 'a' not in data or 'b' not in data:
-            return jsonify({'error': 'Требуются параметры a и b'}), 400
-
-        a = float(data['a'])
-        b = float(data['b'])
-        result = calculator.subtract(a, b)
-
-        return jsonify({'operation': 'subtract', 'a': a, 'b': b, 'result': result})
-    except ValueError as e:
-        return jsonify({'error': f'Некорректные данные: {str(e)}'}), 400
+        result = calculator.subtract(data['a'], data['b'])
+        return jsonify({'operation': 'subtract', 'a': data['a'], 'b': data['b'], 'result': result})
     except Exception as e:
         return jsonify({'error': f'Внутренняя ошибка: {str(e)}'}), 500
 
 
 @app.route('/api/multiply', methods=['POST'])
-def multiply():
+@validate_request(BinaryOperationRequestSchema)
+def multiply(data):
+    """Умножение двух чисел."""
     try:
-        data = request.get_json()
-        if not data or 'a' not in data or 'b' not in data:
-            return jsonify({'error': 'Требуются параметры a и b'}), 400
-
-        a = float(data['a'])
-        b = float(data['b'])
-        result = calculator.multiply(a, b)
-
-        return jsonify({'operation': 'multiply', 'a': a, 'b': b, 'result': result})
-    except ValueError as e:
-        return jsonify({'error': f'Некорректные данные: {str(e)}'}), 400
+        result = calculator.multiply(data['a'], data['b'])
+        return jsonify({'operation': 'multiply', 'a': data['a'], 'b': data['b'], 'result': result})
     except Exception as e:
         return jsonify({'error': f'Внутренняя ошибка: {str(e)}'}), 500
 
 
 @app.route('/api/divide', methods=['POST'])
-def divide():
+@validate_request(BinaryOperationRequestSchema)
+def divide(data):
+    """Деление двух чисел."""
     try:
-        data = request.get_json()
-        if not data or 'a' not in data or 'b' not in data:
-            return jsonify({'error': 'Требуются параметры a и b'}), 400
-
-        a = float(data['a'])
-        b = float(data['b'])
-        result = calculator.divide(a, b)
-
-        return jsonify({'operation': 'divide', 'a': a, 'b': b, 'result': result})
+        result = calculator.divide(data['a'], data['b'])
+        return jsonify({'operation': 'divide', 'a': data['a'], 'b': data['b'], 'result': result})
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
     except Exception as e:
@@ -160,25 +223,19 @@ def divide():
 
 
 @app.route('/api/round', methods=['POST'])
-def round_number():
+@validate_request(RoundRequestSchema)
+def round_number(data):
+    """Округление числа."""
     try:
-        data = request.get_json()
-        if not data or 'value' not in data or 'precision' not in data:
-            return jsonify({'error': 'Требуются параметры value и precision'}), 400
-
-        value = float(data['value'])
-        precision = float(data['precision'])
-        method = data.get('method', 'auto')
-
-        # Валидация метода
-        valid_methods = ['auto', 'up', 'down', 'banker', 'truncate']
-        if method not in valid_methods:
-            return jsonify({'error': f'Неподдерживаемый метод. Доступны: {", ".join(valid_methods)}'}), 400
-
-        result = calculator.round_number(value, precision, method)
-
+        result = calculator.round_number(data['value'], data['precision'], data['method'])
         return jsonify(
-            {'operation': 'round', 'value': value, 'precision': precision, 'method': method, 'result': result}
+            {
+                'operation': 'round',
+                'value': data['value'],
+                'precision': data['precision'],
+                'method': data['method'],
+                'result': result,
+            }
         )
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
@@ -188,6 +245,7 @@ def round_number():
 
 @app.route('/api/history', methods=['GET'])
 def get_history():
+    """Получение истории вычислений."""
     try:
         start_time = datetime.now(timezone.utc)
         request_id = str(uuid.uuid4())
@@ -267,17 +325,14 @@ def get_history():
             },
         }
 
-        # Валидация структуры через Marshmallow Schema
-        schema = HistoryResponseSchema()
-        validated_data = schema.dump(schema.load(response_data))
-
-        return jsonify(validated_data)
+        return jsonify(response_data)
     except Exception as e:
         return jsonify({'error': f'Внутренняя ошибка: {str(e)}'}), 500
 
 
 @app.route('/api/history', methods=['DELETE'])
 def clear_history():
+    """Очистка истории вычислений."""
     try:
         calculator.clear_history()
         return jsonify({'message': 'История очищена'})
@@ -286,35 +341,28 @@ def clear_history():
 
 
 @app.route('/api/calculate', methods=['POST'])
-def calculate():
+@validate_request(CalculateRequestSchema)
+def calculate(data):
+    """Универсальный эндпоинт для всех операций."""
     try:
-        data = request.get_json()
-        operation = data['operation'].lower() if data and 'operation' in data else None
+        operation = data['operation'].lower()
 
-        # Для операции round нужны параметры value, precision и опционально method
+        # Для операции round
         if operation == 'round':
-            if not data or 'value' not in data or 'precision' not in data:
-                return jsonify({'error': 'Требуются параметры operation, value и precision'}), 400
-            value = float(data['value'])
-            precision = float(data['precision'])
-            method = data.get('method', 'auto')
-
-            # Валидация метода
-            valid_methods = ['auto', 'up', 'down', 'banker', 'truncate']
-            if method not in valid_methods:
-                return jsonify({'error': f'Неподдерживаемый метод. Доступны: {", ".join(valid_methods)}'}), 400
-
-            result = calculator.round_number(value, precision, method)
+            result = calculator.round_number(data['value'], data['precision'], data.get('method', 'auto'))
             return jsonify(
-                {'operation': operation, 'value': value, 'precision': precision, 'method': method, 'result': result}
+                {
+                    'operation': operation,
+                    'value': data['value'],
+                    'precision': data['precision'],
+                    'method': data.get('method', 'auto'),
+                    'result': result,
+                }
             )
 
-        # Для остальных операций нужны параметры a и b
-        if not data or 'operation' not in data or 'a' not in data or 'b' not in data:
-            return jsonify({'error': 'Требуются параметры operation, a и b'}), 400
-
-        a = float(data['a'])
-        b = float(data['b'])
+        # Для остальных операций
+        a = data['a']
+        b = data['b']
 
         if operation == 'add':
             result = calculator.add(a, b)
@@ -325,10 +373,7 @@ def calculate():
         elif operation == 'divide':
             result = calculator.divide(a, b)
         else:
-            return (
-                jsonify({'error': 'Неподдерживаемая операция. Доступны: add, subtract, multiply, divide, round'}),
-                400,
-            )
+            return jsonify({'error': 'Неподдерживаемая операция'}), 400
 
         return jsonify({'operation': operation, 'a': a, 'b': b, 'result': result})
     except ValueError as e:
@@ -337,13 +382,20 @@ def calculate():
         return jsonify({'error': f'Внутренняя ошибка: {str(e)}'}), 500
 
 
+# ============================================================================
+# Обработчики ошибок
+# ============================================================================
+
+
 @app.errorhandler(404)
 def not_found(error):
+    """Обработка 404 ошибки."""
     return jsonify({'error': 'Endpoint не найден'}), 404
 
 
 @app.errorhandler(405)
 def method_not_allowed(error):
+    """Обработка 405 ошибки."""
     return jsonify({'error': 'Метод не поддерживается'}), 405
 
 

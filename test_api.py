@@ -57,10 +57,7 @@ class TestCalculatorAPI:
         data = json.loads(response.data)
         assert_that(data, has_entry('status', 'ok'))
         assert_that(data, has_entry('message', contains_string('Калькулятор')))
-        assert_that(data, has_entries({
-            'status': 'ok',
-            'message': contains_string('Калькулятор')
-        }))
+        assert_that(data, has_entries({'status': 'ok', 'message': contains_string('Калькулятор')}))
 
     @pytest.mark.parametrize(
         "a,b,expected",
@@ -77,12 +74,9 @@ class TestCalculatorAPI:
         response = client.post('/api/add', data=json.dumps({'a': a, 'b': b}), content_type='application/json')
         assert_that(response.status_code, is_(200))
         data = json.loads(response.data)
-        assert_that(data, has_entries({
-            'operation': equal_to('add'),
-            'a': is_(a),
-            'b': is_(b),
-            'result': equal_to(expected)
-        }))
+        assert_that(
+            data, has_entries({'operation': equal_to('add'), 'a': is_(a), 'b': is_(b), 'result': equal_to(expected)})
+        )
         assert_that(data['result'], any_of(instance_of(int), instance_of(float)))
 
     @pytest.mark.parametrize(
@@ -120,12 +114,7 @@ class TestCalculatorAPI:
         response = client.post('/api/multiply', data=json.dumps({'a': a, 'b': b}), content_type='application/json')
         assert_that(response.status_code, is_(200))
         data = json.loads(response.data)
-        assert_that(data, has_entries({
-            'operation': 'multiply',
-            'a': a,
-            'b': b,
-            'result': expected
-        }))
+        assert_that(data, has_entries({'operation': 'multiply', 'a': a, 'b': b, 'result': expected}))
         assert_that(data['result'], is_(not_none()))
 
     @pytest.mark.parametrize(
@@ -238,67 +227,72 @@ class TestCalculatorAPI:
         response = client.get('/api/history')
         assert_that(response.status_code, is_(equal_to(200)))
         data = json.loads(response.data)
-        
+
         # Проверяем структуру мета-данных
         assert_that(data, has_key('meta'))
         assert_that(data['meta'], has_key('user'))
-        assert_that(data['meta']['user'], has_entries({
-            'id': 'calc-user-001',
-            'name': 'Calculator Service',
-            'role': 'system'
-        }))
+        assert_that(
+            data['meta']['user'], has_entries({'id': 'calc-user-001', 'name': 'Calculator Service', 'role': 'system'})
+        )
         assert_that(data['meta'], has_key('timestamps'))
         assert_that(data['meta']['timestamps'], has_key('request_id'))
         assert_that(data['meta']['timestamps'], has_key('created_at'))
         assert_that(data['meta'], has_key('status'))
-        assert_that(data['meta']['status'], has_entries({
-            'code': 'SUCCESS',
-            'message': contains_string('История получена успешно')
-        }))
-        
+        assert_that(
+            data['meta']['status'],
+            has_entries({'code': 'SUCCESS', 'message': contains_string('История получена успешно')}),
+        )
+
         # Проверяем структуру данных
         assert_that(data, has_key('data'))
         assert_that(data['data'], has_key('history'))
         assert_that(data['data'], has_key('pagination'))
-        assert_that(data['data']['pagination'], has_entries({
-            'total': equal_to(2),
-            'page': equal_to(1),
-            'per_page': equal_to(50),
-            'has_more': is_(False)
-        }))
-        
+        assert_that(
+            data['data']['pagination'],
+            has_entries({'total': equal_to(2), 'page': equal_to(1), 'per_page': equal_to(50), 'has_more': is_(False)}),
+        )
+
         # Проверяем элементы истории
         history = data['data']['history']
         assert_that(history, has_length(2))
         assert_that(history[0], has_key('id'))
         assert_that(history[0], has_key('operation'))
-        assert_that(history[0]['operation'], has_entries({
-            'expression': equal_to('1.0 + 2.0'),
-            'type': equal_to('add'),
-            'operands': has_entries({'a': equal_to(1.0), 'b': equal_to(2.0)})
-        }))
+        assert_that(
+            history[0]['operation'],
+            has_entries(
+                {
+                    'expression': equal_to('1.0 + 2.0'),
+                    'type': equal_to('add'),
+                    'operands': has_entries({'a': equal_to(1.0), 'b': equal_to(2.0)}),
+                }
+            ),
+        )
         assert_that(history[0], has_key('result'))
-        assert_that(history[0]['result'], has_entries({
-            'value': equal_to(3),
-            'formatted': equal_to('3'),
-            'precision': equal_to(0)
-        }))
+        assert_that(
+            history[0]['result'],
+            has_entries({'value': equal_to(3), 'formatted': equal_to('3'), 'precision': equal_to(0)}),
+        )
         assert_that(history[0], has_key('metadata'))
         assert_that(history[0]['metadata'], has_key('session_id'))
-        
-        assert_that(history[1], has_entries({
-            'id': equal_to(2),
-            'operation': has_entries({
-                'expression': equal_to('3.0 * 4.0'),
-                'type': equal_to('multiply'),
-                'operands': has_entries({'a': equal_to(3.0), 'b': equal_to(4.0)})
-            }),
-            'result': has_entries({
-                'value': equal_to(12),
-                'formatted': equal_to('12'),
-                'precision': equal_to(0)
-            })
-        }))
+
+        assert_that(
+            history[1],
+            has_entries(
+                {
+                    'id': equal_to(2),
+                    'operation': has_entries(
+                        {
+                            'expression': equal_to('3.0 * 4.0'),
+                            'type': equal_to('multiply'),
+                            'operands': has_entries({'a': equal_to(3.0), 'b': equal_to(4.0)}),
+                        }
+                    ),
+                    'result': has_entries(
+                        {'value': equal_to(12), 'formatted': equal_to('12'), 'precision': equal_to(0)}
+                    ),
+                }
+            ),
+        )
 
         # Очищаем историю
         response = client.delete('/api/history')
@@ -356,13 +350,13 @@ class TestCalculatorAPI:
         """Тест структуры ответа API."""
         response = client.post('/api/add', data=json.dumps({'a': 5, 'b': 3}), content_type='application/json')
         data = json.loads(response.data)
-        
+
         # Проверяем наличие всех ключей
         assert_that(data, has_key('operation'))
         assert_that(data, has_key('a'))
         assert_that(data, has_key('b'))
         assert_that(data, has_key('result'))
-        
+
         # Проверяем типы значений
         assert_that(data['operation'], instance_of(str))
         assert_that(data['a'], any_of(instance_of(int), instance_of(float)))
@@ -391,18 +385,11 @@ class TestCalculatorAPI:
 
     def test_multiple_operations_sequence(self, client):
         """Тест последовательности нескольких операций."""
-        operations = [
-            ('add', 10, 5, 15),
-            ('subtract', 10, 5, 5),
-            ('multiply', 10, 5, 50),
-            ('divide', 10, 5, 2)
-        ]
-        
+        operations = [('add', 10, 5, 15), ('subtract', 10, 5, 5), ('multiply', 10, 5, 50), ('divide', 10, 5, 2)]
+
         for op, a, b, expected in operations:
             response = client.post(
-                '/api/calculate',
-                data=json.dumps({'operation': op, 'a': a, 'b': b}),
-                content_type='application/json'
+                '/api/calculate', data=json.dumps({'operation': op, 'a': a, 'b': b}), content_type='application/json'
             )
             data = json.loads(response.data)
             assert_that(data['result'], is_(equal_to(expected)))
@@ -412,10 +399,10 @@ class TestCalculatorAPI:
         client.post('/api/add', data=json.dumps({'a': 1, 'b': 1}), content_type='application/json')
         client.post('/api/add', data=json.dumps({'a': 2, 'b': 2}), content_type='application/json')
         client.post('/api/add', data=json.dumps({'a': 3, 'b': 3}), content_type='application/json')
-        
+
         response = client.get('/api/history')
         data = json.loads(response.data)
-        
+
         history = data['data']['history']
         assert_that(history, has_length(3))
         assert_that(history[0]['result']['value'], is_(equal_to(2)))
@@ -432,18 +419,11 @@ class TestCalculatorAPI:
     def test_calculate_endpoint_structure(self, client):
         """Тест структуры универсального endpoint."""
         response = client.post(
-            '/api/calculate',
-            data=json.dumps({'operation': 'add', 'a': 5, 'b': 3}),
-            content_type='application/json'
+            '/api/calculate', data=json.dumps({'operation': 'add', 'a': 5, 'b': 3}), content_type='application/json'
         )
         data = json.loads(response.data)
-        
-        assert_that(data, has_entries({
-            'operation': 'add',
-            'a': 5,
-            'b': 3,
-            'result': 8
-        }))
+
+        assert_that(data, has_entries({'operation': 'add', 'a': 5, 'b': 3, 'result': 8}))
 
 
 if __name__ == '__main__':

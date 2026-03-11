@@ -69,19 +69,12 @@ def test_divide(calculator, a, b, expected):
     """Тест деления с параметризацией."""
     result = calculator.divide(a, b)
     assert_that(result, close_to(expected, 0.0001))
-    assert_that(result, all_of(
-        instance_of(float),
-        greater_than(-1000),
-        less_than(1000)
-    ))
+    assert_that(result, all_of(instance_of(float), greater_than(-1000), less_than(1000)))
 
 
 def test_divide_by_zero(calculator):
     """Тест деления на ноль."""
-    assert_that(
-        calling(calculator.divide).with_args(5, 0),
-        raises(ValueError, "Деление на ноль")
-    )
+    assert_that(calling(calculator.divide).with_args(5, 0), raises(ValueError, "Деление на ноль"))
 
 
 def test_history_after_operations(calculator):
@@ -95,20 +88,11 @@ def test_history_after_operations(calculator):
     history = calculator.get_history()
     assert_that(history, has_length(3))
     assert_that(history, instance_of(list))
-    
+
     # Проверяем каждую запись с разными матчерами
-    assert_that(history[0], contains_exactly(
-        equal_to("2 + 3"),
-        equal_to(5)
-    ))
-    assert_that(history[1], contains_exactly(
-        is_("5 - 1"),
-        is_(4)
-    ))
-    assert_that(history[2], contains_exactly(
-        equal_to("4 * 2"),
-        equal_to(8)
-    ))
+    assert_that(history[0], contains_exactly(equal_to("2 + 3"), equal_to(5)))
+    assert_that(history[1], contains_exactly(is_("5 - 1"), is_(4)))
+    assert_that(history[2], contains_exactly(equal_to("4 * 2"), equal_to(8)))
 
 
 def test_clear_history(calculator):
@@ -116,7 +100,7 @@ def test_clear_history(calculator):
     # Добавляем операции
     calculator.add(1, 1)
     calculator.multiply(2, 3)
-    
+
     assert_that(calculator.get_history(), has_length(2))
 
     # Очищаем историю
@@ -132,35 +116,26 @@ def test_history_persistence(calculator):
     # Добавляем операции
     calculator.add(1, 2)
     calculator.multiply(3, 4)
-    
+
     # Проверяем, что история содержит записи
     history = calculator.get_history()
     assert_that(history, has_length(2))
     assert_that(history, instance_of(list))
-    
+
     # Проверяем типы элементов
     assert_that(history[0], instance_of(tuple))
     assert_that(history[1], instance_of(tuple))
-    
+
     # Проверяем содержимое
-    assert_that(history[0], contains_exactly(
-        equal_to("1 + 2"),
-        equal_to(3)
-    ))
-    assert_that(history[1], contains_exactly(
-        is_("3 * 4"),
-        is_(12)
-    ))
+    assert_that(history[0], contains_exactly(equal_to("1 + 2"), equal_to(3)))
+    assert_that(history[1], contains_exactly(is_("3 * 4"), is_(12)))
 
 
 def test_result_types(calculator):
     """Тест типов возвращаемых значений."""
     result = calculator.add(1, 2)
-    assert_that(result, any_of(
-        instance_of(int),
-        instance_of(float)
-    ))
-    
+    assert_that(result, any_of(instance_of(int), instance_of(float)))
+
     result = calculator.divide(1, 2)
     assert_that(result, instance_of(float))
     assert_that(result, greater_than(0))
@@ -171,7 +146,7 @@ def test_history_item_structure(calculator):
     """Тест структуры элементов истории."""
     calculator.add(5, 3)
     history = calculator.get_history()
-    
+
     assert_that(history, has_length(1))
     assert_that(history[0], instance_of(tuple))
     assert_that(history[0], has_length(2))
@@ -186,14 +161,9 @@ def test_multiple_operations_sequence(calculator):
     results.append(calculator.subtract(10, 5))
     results.append(calculator.multiply(10, 5))
     results.append(calculator.divide(10, 5))
-    
+
     assert_that(results, has_length(4))
-    assert_that(results, contains_exactly(
-        equal_to(15),
-        equal_to(5),
-        equal_to(50),
-        equal_to(2.0)
-    ))
+    assert_that(results, contains_exactly(equal_to(15), equal_to(5), equal_to(50), equal_to(2.0)))
 
 
 def test_negative_numbers(calculator):
@@ -201,11 +171,11 @@ def test_negative_numbers(calculator):
     result = calculator.add(-5, -3)
     assert_that(result, less_than(0))
     assert_that(result, equal_to(-8))
-    
+
     result = calculator.multiply(-2, 3)
     assert_that(result, less_than(0))
     assert_that(result, equal_to(-6))
-    
+
     result = calculator.multiply(-2, -3)
     assert_that(result, greater_than(0))
     assert_that(result, equal_to(6))

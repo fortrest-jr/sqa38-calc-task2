@@ -1,7 +1,3 @@
-"""
-Flask веб-приложение с REST API для калькулятора.
-"""
-
 from flask import Flask, request, jsonify
 from calculator import Calculator
 from datetime import datetime, timezone
@@ -17,61 +13,52 @@ calculator = Calculator()
 # Marshmallow Schema для API ответов (используется для документации и валидации)
 # Эти схемы определяют структуру данных, но не используются напрямую для создания объектов
 class UserSchema(Schema):
-    """Схема пользователя для метаданных."""
     id = fields.Str(required=True)
     name = fields.Str(required=True)
     role = fields.Str(required=True)
 
 
 class TimestampsSchema(Schema):
-    """Схема временных меток."""
     created_at = fields.Str(required=True)
     timezone = fields.Str(required=True)
     request_id = fields.Str(required=True)
 
 
 class StatusSchema(Schema):
-    """Схема статуса выполнения."""
     code = fields.Str(required=True)
     message = fields.Str(required=True)
     execution_time_ms = fields.Int(required=True)
 
 
 class MetaSchema(Schema):
-    """Схема метаданных ответа."""
     user = fields.Nested(UserSchema, required=True)
     timestamps = fields.Nested(TimestampsSchema, required=True)
     status = fields.Nested(StatusSchema, required=True)
 
 
 class OperandsSchema(Schema):
-    """Схема операндов."""
     a = fields.Float(required=True)
     b = fields.Float(required=True)
 
 
 class OperationSchema(Schema):
-    """Схема операции."""
     expression = fields.Str(required=True)
     type = fields.Str(required=True)
     operands = fields.Nested(OperandsSchema, required=True)
 
 
 class ResultSchema(Schema):
-    """Схема результата операции."""
     value = fields.Float(required=True)
     formatted = fields.Str(required=True)
     precision = fields.Int(required=True)
 
 
 class ItemMetadataSchema(Schema):
-    """Схема метаданных элемента истории."""
     timestamp = fields.Str(required=True)
     session_id = fields.Str(required=True)
 
 
 class HistoryItemSchema(Schema):
-    """Схема элемента истории."""
     id = fields.Int(required=True)
     operation = fields.Nested(OperationSchema, required=True)
     result = fields.Nested(ResultSchema, required=True)
@@ -79,7 +66,6 @@ class HistoryItemSchema(Schema):
 
 
 class PaginationSchema(Schema):
-    """Схема пагинации."""
     total = fields.Int(required=True)
     page = fields.Int(required=True)
     per_page = fields.Int(required=True)
@@ -87,35 +73,22 @@ class PaginationSchema(Schema):
 
 
 class DataSchema(Schema):
-    """Схема данных истории."""
     history = fields.List(fields.Nested(HistoryItemSchema), required=True)
     pagination = fields.Nested(PaginationSchema, required=True)
 
 
 class HistoryResponseSchema(Schema):
-    """
-    Главная схема ответа API истории.
-    
-    Определяет структуру сложного вложенного JSON с метаданными.
-    Используется для документации и валидации структуры ответа.
-    
-    Примечание: Эти схемы определены для продакшн-кода, но неудобны
-    для прямого использования в тестах, так как требуют работы через
-    словари, а не через объекты с атрибутами.
-    """
     meta = fields.Nested(MetaSchema, required=True)
     data = fields.Nested(DataSchema, required=True)
 
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    """Проверка работоспособности API."""
     return jsonify({'status': 'ok', 'message': 'Калькулятор работает'})
 
 
 @app.route('/api/add', methods=['POST'])
 def add():
-    """API endpoint для сложения."""
     try:
         data = request.get_json()
         if not data or 'a' not in data or 'b' not in data:
@@ -134,7 +107,6 @@ def add():
 
 @app.route('/api/subtract', methods=['POST'])
 def subtract():
-    """API endpoint для вычитания."""
     try:
         data = request.get_json()
         if not data or 'a' not in data or 'b' not in data:
@@ -153,7 +125,6 @@ def subtract():
 
 @app.route('/api/multiply', methods=['POST'])
 def multiply():
-    """API endpoint для умножения."""
     try:
         data = request.get_json()
         if not data or 'a' not in data or 'b' not in data:
@@ -172,7 +143,6 @@ def multiply():
 
 @app.route('/api/divide', methods=['POST'])
 def divide():
-    """API endpoint для деления."""
     try:
         data = request.get_json()
         if not data or 'a' not in data or 'b' not in data:
@@ -191,7 +161,6 @@ def divide():
 
 @app.route('/api/round', methods=['POST'])
 def round_number():
-    """API endpoint для округления чисел."""
     try:
         data = request.get_json()
         if not data or 'value' not in data or 'precision' not in data:
@@ -219,17 +188,6 @@ def round_number():
 
 @app.route('/api/history', methods=['GET'])
 def get_history():
-    """
-    API endpoint для получения истории вычислений.
-
-    Возвращает сложную вложенную структуру JSON с метаданными,
-    соответствующую HistoryResponseSchema.
-    
-    Эта структура создана специально для демонстрации на мастер-классе SQA Days 38:
-    - Marshmallow Schema определяет структуру в продакшн-коде
-    - Тесты работают с обычными словарями (неудобно)
-    - Задача AI-агента: сгенерировать Pydantic модели для удобных тестов
-    """
     try:
         start_time = datetime.now(timezone.utc)
         request_id = str(uuid.uuid4())
@@ -273,7 +231,10 @@ def get_history():
                         'formatted': f"{result:.{precision}f}" if precision > 0 else f"{int(result)}",
                         'precision': precision,
                     },
-                    'metadata': {'timestamp': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'), 'session_id': session_id},
+                    'metadata': {
+                        'timestamp': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
+                        'session_id': session_id,
+                    },
                 }
             )
 
@@ -309,7 +270,7 @@ def get_history():
         # Валидация структуры через Marshmallow Schema
         schema = HistoryResponseSchema()
         validated_data = schema.dump(schema.load(response_data))
-        
+
         return jsonify(validated_data)
     except Exception as e:
         return jsonify({'error': f'Внутренняя ошибка: {str(e)}'}), 500
@@ -317,7 +278,6 @@ def get_history():
 
 @app.route('/api/history', methods=['DELETE'])
 def clear_history():
-    """API endpoint для очистки истории вычислений."""
     try:
         calculator.clear_history()
         return jsonify({'message': 'История очищена'})
@@ -327,7 +287,6 @@ def clear_history():
 
 @app.route('/api/calculate', methods=['POST'])
 def calculate():
-    """Универсальный API endpoint для всех операций."""
     try:
         data = request.get_json()
         operation = data['operation'].lower() if data and 'operation' in data else None
@@ -380,13 +339,11 @@ def calculate():
 
 @app.errorhandler(404)
 def not_found(error):
-    """Обработчик для несуществующих endpoints."""
     return jsonify({'error': 'Endpoint не найден'}), 404
 
 
 @app.errorhandler(405)
 def method_not_allowed(error):
-    """Обработчик для неподдерживаемых HTTP методов."""
     return jsonify({'error': 'Метод не поддерживается'}), 405
 
 

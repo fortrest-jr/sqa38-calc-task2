@@ -6,31 +6,105 @@ from flask import Flask, request, jsonify
 from calculator import Calculator
 from datetime import datetime, timezone
 import uuid
+from marshmallow import Schema, fields
 
 app = Flask(__name__)
 
 # Создаем глобальный экземпляр калькулятора
 calculator = Calculator()
 
-# Схема структуры ответа истории (для документации - неудобный формат для прямого использования в тестах)
-# {
-#     "meta": {
-#         "user": {"id": str, "name": str, "role": str},
-#         "timestamps": {"created_at": str, "timezone": str, "request_id": str},
-#         "status": {"code": str, "message": str, "execution_time_ms": int}
-#     },
-#     "data": {
-#         "history": [
-#             {
-#                 "id": int,
-#                 "operation": {"expression": str, "type": str, "operands": {"a": float, "b": float}},
-#                 "result": {"value": float, "formatted": str, "precision": int},
-#                 "metadata": {"timestamp": str, "session_id": str}
-#             }
-#         ],
-#         "pagination": {"total": int, "page": int, "per_page": int, "has_more": bool}
-#     }
-# }
+
+# Marshmallow Schema для API ответов (используется для документации и валидации)
+# Эти схемы определяют структуру данных, но не используются напрямую для создания объектов
+class UserSchema(Schema):
+    """Схема пользователя для метаданных."""
+    id = fields.Str(required=True)
+    name = fields.Str(required=True)
+    role = fields.Str(required=True)
+
+
+class TimestampsSchema(Schema):
+    """Схема временных меток."""
+    created_at = fields.Str(required=True)
+    timezone = fields.Str(required=True)
+    request_id = fields.Str(required=True)
+
+
+class StatusSchema(Schema):
+    """Схема статуса выполнения."""
+    code = fields.Str(required=True)
+    message = fields.Str(required=True)
+    execution_time_ms = fields.Int(required=True)
+
+
+class MetaSchema(Schema):
+    """Схема метаданных ответа."""
+    user = fields.Nested(UserSchema, required=True)
+    timestamps = fields.Nested(TimestampsSchema, required=True)
+    status = fields.Nested(StatusSchema, required=True)
+
+
+class OperandsSchema(Schema):
+    """Схема операндов."""
+    a = fields.Float(required=True)
+    b = fields.Float(required=True)
+
+
+class OperationSchema(Schema):
+    """Схема операции."""
+    expression = fields.Str(required=True)
+    type = fields.Str(required=True)
+    operands = fields.Nested(OperandsSchema, required=True)
+
+
+class ResultSchema(Schema):
+    """Схема результата операции."""
+    value = fields.Float(required=True)
+    formatted = fields.Str(required=True)
+    precision = fields.Int(required=True)
+
+
+class ItemMetadataSchema(Schema):
+    """Схема метаданных элемента истории."""
+    timestamp = fields.Str(required=True)
+    session_id = fields.Str(required=True)
+
+
+class HistoryItemSchema(Schema):
+    """Схема элемента истории."""
+    id = fields.Int(required=True)
+    operation = fields.Nested(OperationSchema, required=True)
+    result = fields.Nested(ResultSchema, required=True)
+    metadata = fields.Nested(ItemMetadataSchema, required=True)
+
+
+class PaginationSchema(Schema):
+    """Схема пагинации."""
+    total = fields.Int(required=True)
+    page = fields.Int(required=True)
+    per_page = fields.Int(required=True)
+    has_more = fields.Bool(required=True)
+
+
+class DataSchema(Schema):
+    """Схема данных истории."""
+    history = fields.List(fields.Nested(HistoryItemSchema), required=True)
+    pagination = fields.Nested(PaginationSchema, required=True)
+
+
+class HistoryResponseSchema(Schema):
+    """
+    Главная схема ответа API истории.
+    
+    Определяет структуру сложного вложенного JSON с метаданными.
+    Используется для документации и валидации структуры ответа.
+    
+    Примечание: Эти схемы определены для продакшн-кода, но неудобны
+    для прямого использования в тестах, так как требуют работы через
+    словари, а не через объекты с атрибутами.
+    """
+    meta = fields.Nested(MetaSchema, required=True)
+    data = fields.Nested(DataSchema, required=True)
 
 
 @app.route('/api/health', methods=['GET'])
@@ -148,9 +222,13 @@ def get_history():
     """
     API endpoint для получения истории вычислений.
 
-    Возвращает сложную вложенную структуру JSON с метаданными.
-    Эта структура создана специально для демонстрации генерации датаклассов
-    на мастер-классе SQA Days 38.
+    Возвращает сложную вложенную структуру JSON с метаданными,
+    соответствующую HistoryResponseSchema.
+    
+    Эта структура создана специально для демонстрации на мастер-классе SQA Days 38:
+    - Marshmallow Schema определяет структуру в продакшн-коде
+    - Тесты работают с обычными словарями (неудобно)
+    - Задача AI-агента: сгенерировать Pydantic модели для удобных тестов
     """
     try:
         start_time = datetime.now(timezone.utc)
@@ -159,7 +237,7 @@ def get_history():
 
         history = calculator.get_history()
 
-        # Формируем сложную вложенную структуру
+        # Формируем сложную вложенную структуру согласно HistoryResponseSchema
         history_items = []
         for idx, (operation, result) in enumerate(history):
             # Парсим операцию для получения типа и операндов
@@ -202,8 +280,8 @@ def get_history():
         # Вычисляем время выполнения
         execution_time_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
 
-        # Формируем полный ответ с метаданными
-        response = {
+        # Формируем полный ответ с метаданными согласно HistoryResponseSchema
+        response_data = {
             'meta': {
                 'user': {'id': 'calc-user-001', 'name': 'Calculator Service', 'role': 'system'},
                 'timestamps': {
@@ -228,7 +306,11 @@ def get_history():
             },
         }
 
-        return jsonify(response)
+        # Валидация структуры через Marshmallow Schema
+        schema = HistoryResponseSchema()
+        validated_data = schema.dump(schema.load(response_data))
+        
+        return jsonify(validated_data)
     except Exception as e:
         return jsonify({'error': f'Внутренняя ошибка: {str(e)}'}), 500
 

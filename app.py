@@ -91,6 +91,129 @@ class ErrorResponseSchema(Schema):
 
 
 # ============================================================================
+# Schemas для сериализации выходных данных (Response Schemas)
+# ============================================================================
+
+
+class BinaryOperationResponseSchema(Schema):
+    """Схема для ответа операций с двумя операндами."""
+
+    operation = fields.Str(required=True)
+    a = fields.Float(required=True)
+    b = fields.Float(required=True)
+    result = fields.Float(required=True)
+
+
+class RoundResponseSchema(Schema):
+    """Схема для ответа операции округления."""
+
+    operation = fields.Str(required=True)
+    value = fields.Float(required=True)
+    precision = fields.Integer(required=True)
+    method = fields.Str(required=True)
+    result = fields.Float(required=True)
+
+
+# ============================================================================
+# Nested Schemas для сложных структур (History Response)
+# ============================================================================
+
+
+class OperandsSchema(Schema):
+    """Схема для операндов операции."""
+
+    a = fields.Float(required=True)
+    b = fields.Float(required=True)
+
+
+class OperationDetailSchema(Schema):
+    """Схема для детальной информации об операции."""
+
+    expression = fields.Str(required=True)
+    type = fields.Str(required=True)
+    operands = fields.Nested(OperandsSchema, required=True)
+
+
+class ResultDetailSchema(Schema):
+    """Схема для детальной информации о результате."""
+
+    value = fields.Float(required=True)
+    formatted = fields.Str(required=True)
+    precision = fields.Integer(required=True)
+
+
+class ItemMetadataSchema(Schema):
+    """Схема для метаданных элемента истории."""
+
+    timestamp = fields.Str(required=True)
+    session_id = fields.Str(required=True)
+
+
+class HistoryItemSchema(Schema):
+    """Схема для элемента истории вычислений."""
+
+    id = fields.Integer(required=True)
+    operation = fields.Nested(OperationDetailSchema, required=True)
+    result = fields.Nested(ResultDetailSchema, required=True)
+    metadata = fields.Nested(ItemMetadataSchema, required=True)
+
+
+class PaginationSchema(Schema):
+    """Схема для пагинации."""
+
+    total = fields.Integer(required=True)
+    page = fields.Integer(required=True)
+    per_page = fields.Integer(required=True)
+    has_more = fields.Boolean(required=True)
+
+
+class UserSchema(Schema):
+    """Схема для информации о пользователе."""
+
+    id = fields.Str(required=True)
+    name = fields.Str(required=True)
+    role = fields.Str(required=True)
+
+
+class TimestampsSchema(Schema):
+    """Схема для временных меток."""
+
+    created_at = fields.Str(required=True)
+    timezone = fields.Str(required=True)
+    request_id = fields.Str(required=True)
+
+
+class StatusSchema(Schema):
+    """Схема для статуса операции."""
+
+    code = fields.Str(required=True)
+    message = fields.Str(required=True)
+    execution_time_ms = fields.Integer(required=True)
+
+
+class MetaSchema(Schema):
+    """Схема для метаданных ответа."""
+
+    user = fields.Nested(UserSchema, required=True)
+    timestamps = fields.Nested(TimestampsSchema, required=True)
+    status = fields.Nested(StatusSchema, required=True)
+
+
+class HistoryDataSchema(Schema):
+    """Схема для данных истории."""
+
+    history = fields.List(fields.Nested(HistoryItemSchema), required=True)
+    pagination = fields.Nested(PaginationSchema, required=True)
+
+
+class HistoryResponseSchema(Schema):
+    """Схема для полного ответа с историей вычислений."""
+
+    meta = fields.Nested(MetaSchema, required=True)
+    data = fields.Nested(HistoryDataSchema, required=True)
+
+
+# ============================================================================
 # Декоратор для валидации входных данных
 # ============================================================================
 
@@ -182,9 +305,11 @@ def add(data):
     """Сложение двух чисел."""
     try:
         result = calculator.add(data['a'], data['b'])
-        return jsonify({'operation': 'add', 'a': data['a'], 'b': data['b'], 'result': result})
+        response_data = {'operation': 'add', 'a': data['a'], 'b': data['b'], 'result': result}
+        return jsonify(BinaryOperationResponseSchema().dump(response_data))
     except Exception as e:
-        return jsonify({'error': f'Внутренняя ошибка: {str(e)}'}), 500
+        error_response = ErrorResponseSchema().dump({'error': f'Внутренняя ошибка: {str(e)}', 'code': 'INTERNAL_ERROR'})
+        return jsonify(error_response), 500
 
 
 @app.route('/api/subtract', methods=['POST'])
@@ -193,9 +318,11 @@ def subtract(data):
     """Вычитание двух чисел."""
     try:
         result = calculator.subtract(data['a'], data['b'])
-        return jsonify({'operation': 'subtract', 'a': data['a'], 'b': data['b'], 'result': result})
+        response_data = {'operation': 'subtract', 'a': data['a'], 'b': data['b'], 'result': result}
+        return jsonify(BinaryOperationResponseSchema().dump(response_data))
     except Exception as e:
-        return jsonify({'error': f'Внутренняя ошибка: {str(e)}'}), 500
+        error_response = ErrorResponseSchema().dump({'error': f'Внутренняя ошибка: {str(e)}', 'code': 'INTERNAL_ERROR'})
+        return jsonify(error_response), 500
 
 
 @app.route('/api/multiply', methods=['POST'])
@@ -204,9 +331,11 @@ def multiply(data):
     """Умножение двух чисел."""
     try:
         result = calculator.multiply(data['a'], data['b'])
-        return jsonify({'operation': 'multiply', 'a': data['a'], 'b': data['b'], 'result': result})
+        response_data = {'operation': 'multiply', 'a': data['a'], 'b': data['b'], 'result': result}
+        return jsonify(BinaryOperationResponseSchema().dump(response_data))
     except Exception as e:
-        return jsonify({'error': f'Внутренняя ошибка: {str(e)}'}), 500
+        error_response = ErrorResponseSchema().dump({'error': f'Внутренняя ошибка: {str(e)}', 'code': 'INTERNAL_ERROR'})
+        return jsonify(error_response), 500
 
 
 @app.route('/api/divide', methods=['POST'])
@@ -215,11 +344,14 @@ def divide(data):
     """Деление двух чисел."""
     try:
         result = calculator.divide(data['a'], data['b'])
-        return jsonify({'operation': 'divide', 'a': data['a'], 'b': data['b'], 'result': result})
+        response_data = {'operation': 'divide', 'a': data['a'], 'b': data['b'], 'result': result}
+        return jsonify(BinaryOperationResponseSchema().dump(response_data))
     except ValueError as e:
-        return jsonify({'error': str(e)}), 400
+        error_response = ErrorResponseSchema().dump({'error': str(e), 'code': 'VALIDATION_ERROR'})
+        return jsonify(error_response), 400
     except Exception as e:
-        return jsonify({'error': f'Внутренняя ошибка: {str(e)}'}), 500
+        error_response = ErrorResponseSchema().dump({'error': f'Внутренняя ошибка: {str(e)}', 'code': 'INTERNAL_ERROR'})
+        return jsonify(error_response), 500
 
 
 @app.route('/api/round', methods=['POST'])
@@ -228,19 +360,20 @@ def round_number(data):
     """Округление числа."""
     try:
         result = calculator.round_number(data['value'], data['precision'], data['method'])
-        return jsonify(
-            {
-                'operation': 'round',
-                'value': data['value'],
-                'precision': data['precision'],
-                'method': data['method'],
-                'result': result,
-            }
-        )
+        response_data = {
+            'operation': 'round',
+            'value': data['value'],
+            'precision': data['precision'],
+            'method': data['method'],
+            'result': result,
+        }
+        return jsonify(RoundResponseSchema().dump(response_data))
     except ValueError as e:
-        return jsonify({'error': str(e)}), 400
+        error_response = ErrorResponseSchema().dump({'error': str(e), 'code': 'VALIDATION_ERROR'})
+        return jsonify(error_response), 400
     except Exception as e:
-        return jsonify({'error': f'Внутренняя ошибка: {str(e)}'}), 500
+        error_response = ErrorResponseSchema().dump({'error': f'Внутренняя ошибка: {str(e)}', 'code': 'INTERNAL_ERROR'})
+        return jsonify(error_response), 500
 
 
 @app.route('/api/history', methods=['GET'])
@@ -325,9 +458,11 @@ def get_history():
             },
         }
 
-        return jsonify(response_data)
+        # Используем схему для валидации и сериализации ответа
+        return jsonify(HistoryResponseSchema().dump(response_data))
     except Exception as e:
-        return jsonify({'error': f'Внутренняя ошибка: {str(e)}'}), 500
+        error_response = ErrorResponseSchema().dump({'error': f'Внутренняя ошибка: {str(e)}', 'code': 'INTERNAL_ERROR'})
+        return jsonify(error_response), 500
 
 
 @app.route('/api/history', methods=['DELETE'])
@@ -337,7 +472,8 @@ def clear_history():
         calculator.clear_history()
         return jsonify({'message': 'История очищена'})
     except Exception as e:
-        return jsonify({'error': f'Внутренняя ошибка: {str(e)}'}), 500
+        error_response = ErrorResponseSchema().dump({'error': f'Внутренняя ошибка: {str(e)}', 'code': 'INTERNAL_ERROR'})
+        return jsonify(error_response), 500
 
 
 @app.route('/api/calculate', methods=['POST'])
@@ -350,15 +486,14 @@ def calculate(data):
         # Для операции round
         if operation == 'round':
             result = calculator.round_number(data['value'], data['precision'], data.get('method', 'auto'))
-            return jsonify(
-                {
-                    'operation': operation,
-                    'value': data['value'],
-                    'precision': data['precision'],
-                    'method': data.get('method', 'auto'),
-                    'result': result,
-                }
-            )
+            response_data = {
+                'operation': operation,
+                'value': data['value'],
+                'precision': data['precision'],
+                'method': data.get('method', 'auto'),
+                'result': result,
+            }
+            return jsonify(RoundResponseSchema().dump(response_data))
 
         # Для остальных операций
         a = data['a']
@@ -373,13 +508,19 @@ def calculate(data):
         elif operation == 'divide':
             result = calculator.divide(a, b)
         else:
-            return jsonify({'error': 'Неподдерживаемая операция'}), 400
+            error_response = ErrorResponseSchema().dump(
+                {'error': 'Неподдерживаемая операция', 'code': 'INVALID_OPERATION'}
+            )
+            return jsonify(error_response), 400
 
-        return jsonify({'operation': operation, 'a': a, 'b': b, 'result': result})
+        response_data = {'operation': operation, 'a': a, 'b': b, 'result': result}
+        return jsonify(BinaryOperationResponseSchema().dump(response_data))
     except ValueError as e:
-        return jsonify({'error': str(e)}), 400
+        error_response = ErrorResponseSchema().dump({'error': str(e), 'code': 'VALIDATION_ERROR'})
+        return jsonify(error_response), 400
     except Exception as e:
-        return jsonify({'error': f'Внутренняя ошибка: {str(e)}'}), 500
+        error_response = ErrorResponseSchema().dump({'error': f'Внутренняя ошибка: {str(e)}', 'code': 'INTERNAL_ERROR'})
+        return jsonify(error_response), 500
 
 
 # ============================================================================

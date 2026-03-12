@@ -28,22 +28,26 @@ def get_history():
             op_type = 'unknown'
             operands = {'a': 0, 'b': 0}
 
-            if '+' in operation:
+            if operation.startswith('round('):
+                op_type = 'round'
+                operands = {'a': 0, 'b': 0}
+            elif ' + ' in operation:
                 op_type = 'add'
-                parts = operation.split('+')
-                operands = {'a': float(parts[0].strip()), 'b': float(parts[1].strip())}
-            elif '-' in operation:
+                parts = operation.split(' + ')
+                operands = {'a': float(parts[0]), 'b': float(parts[1])}
+            elif ' - ' in operation:
+
                 op_type = 'subtract'
-                parts = operation.split('-')
-                operands = {'a': float(parts[0].strip()), 'b': float(parts[1].strip())}
-            elif '*' in operation:
+                parts = operation.split(' - ')
+                operands = {'a': float(parts[0]), 'b': float(parts[1])}
+            elif ' * ' in operation:
                 op_type = 'multiply'
-                parts = operation.split('*')
-                operands = {'a': float(parts[0].strip()), 'b': float(parts[1].strip())}
-            elif '/' in operation:
+                parts = operation.split(' * ')
+                operands = {'a': float(parts[0]), 'b': float(parts[1])}
+            elif ' / ' in operation:
                 op_type = 'divide'
-                parts = operation.split('/')
-                operands = {'a': float(parts[0].strip()), 'b': float(parts[1].strip())}
+                parts = operation.split(' / ')
+                operands = {'a': float(parts[0]), 'b': float(parts[1])}
 
             # Определяем точность для форматирования
             precision = 2 if isinstance(result, float) and not result.is_integer() else 0

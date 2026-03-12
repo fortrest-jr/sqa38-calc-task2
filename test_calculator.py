@@ -4,7 +4,6 @@
 """
 
 import pytest
-import tempfile
 from hamcrest import (
     assert_that,
     equal_to,
@@ -13,31 +12,15 @@ from hamcrest import (
     has_length,
     instance_of,
     contains_exactly,
-    contains_string,
     greater_than,
     less_than,
     all_of,
     any_of,
-    has_item,
     empty,
     not_none,
-    same_instance,
     calling,
     raises,
 )
-from calculator import Calculator
-
-
-@pytest.fixture
-def calculator():
-    """Фикстура для создания калькулятора с временным файлом истории."""
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.json') as temp_file:
-        # Создаем калькулятор с временным файлом истории
-        calc = Calculator()
-        calc.history_file = temp_file.name
-        calc.history = []
-
-        yield calc
 
 
 @pytest.mark.parametrize("a,b,expected", [(2, 3, 5), (-1, 1, 0), (0.5, 0.5, 1.0)])

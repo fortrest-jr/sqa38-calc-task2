@@ -5,7 +5,6 @@
 
 import pytest
 import json
-import tempfile
 from hamcrest import (
     assert_that,
     equal_to,
@@ -13,38 +12,18 @@ from hamcrest import (
     close_to,
     has_length,
     instance_of,
-    contains_exactly,
     contains_string,
     greater_than,
     less_than,
-    all_of,
     any_of,
     has_entry,
     has_entries,
     has_key,
-    has_value,
     empty,
     not_none,
-    matches_regexp,
     starts_with,
     ends_with,
 )
-from app import app, calculator
-
-
-@pytest.fixture
-def client():
-    """Создание тестового клиента Flask с изолированной историей."""
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.json') as temp_file:
-        # Настраиваем тестовое окружение
-        app.config['TESTING'] = True
-        calculator.history_file = temp_file.name
-
-        # Очищаем историю перед каждым тестом
-        calculator.history = []
-
-        with app.test_client() as client:
-            yield client
 
 
 class TestCalculatorAPI:

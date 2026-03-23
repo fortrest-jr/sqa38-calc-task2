@@ -170,7 +170,3 @@ def test_zero_operations(calculator):
     assert_that(calculator.subtract(5, 0), equal_to(5))
     assert_that(calculator.multiply(0, 5), equal_to(0))
     assert_that(calculator.multiply(5, 0), equal_to(0))
-
-
-if __name__ == '__main__':
-    pytest.main([__file__])

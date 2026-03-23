@@ -403,7 +403,3 @@ class TestCalculatorAPI:
         data = json.loads(response.data)
 
         assert_that(data, has_entries({'operation': 'add', 'a': 5, 'b': 3, 'result': 8}))
-
-
-if __name__ == '__main__':
-    pytest.main([__file__])

@@ -121,9 +121,9 @@ def demo():
     # Просмотр истории
     print("3. История вычислений:")
     history = client.get_history()
-    print(f"   Количество операций: {history['count']}")
-    for i, item in enumerate(history['history'], 1):
-        print(f"   {i}. {item['operation']} = {item['result']}")
+    print(f"   Количество операций: {history['data']['pagination']['total']}")
+    for i, item in enumerate(history['data']['history'], 1):
+        print(f"   {i}. {item['operation']['expression']} = {item['result']['value']}")
 
     print("\n=== ДЕМОНСТРАЦИЯ ЗАВЕРШЕНА ===")
 

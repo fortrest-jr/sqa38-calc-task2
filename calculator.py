@@ -5,6 +5,7 @@
 from typing import List, Tuple
 import json
 import os
+import math
 
 
 class Calculator:
@@ -54,8 +55,6 @@ class Calculator:
         - Если value == 0: особые правила
         - Если precision очень большое: что делать?
         """
-        import math
-
         # Обработка особых случаев
         if value == 0:
             result = 0.0
